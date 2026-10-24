@@ -19,7 +19,7 @@ RoboJev-27B: Model card, benchmarks, weights available on Hugging Face. The code
 To install RoboJev and the RoboJev command-line tools, install the RoboJev client with pip:
 
 ```bash
-pip install git+https://github.com/josefchen/robojev
+pip install robojev
 pip install pyarrow          # LeRobot v3.0 datasets
 pip install opencv-python    # live camera
 ```
