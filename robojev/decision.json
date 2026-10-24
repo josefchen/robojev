@@ -1,0 +1,16 @@
+{
+  "how": "Read the log-probabilities of the two tokens at the end of the prompt, add the bias, divide by the temperature and take the softmax: the second number is P(task done).",
+  "prompt": "[kind] noul\n[state] {state}\n{images}\n[question] {question}\n[options]\nfalse\ntrue\n[decision]:",
+  "image": "<|vision_start|><|image_pad|><|vision_end|>",
+  "tokens": {
+    "false": 3721,
+    "true": 1802
+  },
+  "bias": {
+    "false": 0.00011960109259234741,
+    "true": -0.00011981795250903815
+  },
+  "temperature": 0.9,
+  "image_short_side": 288,
+  "frames": 10
+}

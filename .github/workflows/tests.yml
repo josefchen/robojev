@@ -1,0 +1,29 @@
+name: tests
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python: ["3.10", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
+      - run: pip install ".[test,v3]"
+      - run: pytest -q
+      - name: Installed package ships its calibration and commands
+        working-directory: /tmp
+        run: |
+          python -c "import pathlib, robojev; assert (pathlib.Path(robojev.__file__).parent / 'decision.json').is_file()"
+          robojev-grade --help
+          robojev-overlay --help

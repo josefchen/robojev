@@ -1,0 +1,40 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "robojev"
+version = "0.1.0"
+description = "RoboJev-27B: Python client, dataset grader and video overlay, plus a LeRobot plugin."
+readme = "README.md"
+license = "Apache-2.0"
+requires-python = ">=3.10"
+dependencies = ["requests>=2.28", "pillow>=10.1"]
+keywords = ["robotics", "lerobot", "robot-learning", "reward-model", "success-detection", "vision-language-model"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Intended Audience :: Science/Research",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+
+[project.optional-dependencies]
+v3 = ["pyarrow"]
+camera = ["opencv-python", "numpy"]
+test = ["pytest", "numpy"]
+
+[project.scripts]
+robojev = "robojev.__main__:main"
+robojev-grade = "robojev.robojev_grade:main"
+robojev-overlay = "robojev.robojev_overlay:main"
+
+[project.urls]
+Model = "https://huggingface.co/josefchen/RoboJev-27B"
+Demo = "https://huggingface.co/spaces/josefchen/RoboJev-demo"
+Results = "https://huggingface.co/spaces/josefchen/RoboJev-data"
+Source = "https://github.com/josefchen/robojev"
+
+[tool.setuptools]
+packages = ["robojev"]
+
+[tool.setuptools.package-data]
+robojev = ["decision.json"]
