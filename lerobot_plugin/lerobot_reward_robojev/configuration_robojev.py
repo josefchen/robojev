@@ -15,8 +15,8 @@ class RoboJevConfig(RewardModelConfig):
     """RoboJev answers "did the robot complete the task?" with a probability.
 
     RoboJev runs as a server (see the model card at huggingface.co/josefchen/RoboJev-27B), so
-    this reward model has no weights of its own: it sends four frames from each attempt (the
-    start, a third, two thirds and the end) and the task sentence to that server.
+    this reward model has no weights of its own: it sends ten evenly spaced frames from each
+    attempt, including the first and last, and the task sentence to that server.
 
     Args:
         server_url: Where the RoboJev server answers, such as ``http://localhost:8000``.

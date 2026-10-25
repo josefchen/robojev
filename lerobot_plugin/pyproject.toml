@@ -4,8 +4,8 @@ version = "0.1.0"
 description = "RoboJev for LeRobot: rewards a robot when it completes its task"
 readme = "README.md"
 license = "Apache-2.0"
-requires-python = ">=3.10"
-dependencies = ["lerobot", "requests", "pillow", "numpy"]
+requires-python = ">=3.12"
+dependencies = ["lerobot>=0.6.1,<0.7", "requests", "pillow", "numpy"]
 
 [build-system]
 requires = ["setuptools>=68"]
