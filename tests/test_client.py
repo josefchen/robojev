@@ -4,6 +4,7 @@ import json
 import math
 import shutil
 import subprocess
+import sys
 import threading
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
@@ -105,6 +106,25 @@ def test_wrong_frame_count_is_rejected():
         RoboJev("http://127.0.0.1:9").done("Put the ring on the peg", frames(4))
 
 
+def test_cli_scores_images_against_the_selected_server(server, tmp_path):
+    url, seen = server
+    paths = []
+    for i, frame in enumerate(frames(10)):
+        path = tmp_path / f"{i}.jpg"
+        frame.save(path)
+        paths.append(str(path))
+    result = subprocess.run([sys.executable, "-m", "robojev", "Put the ring on the peg", *paths,
+                             "--server", url], check=True, capture_output=True, text=True)
+    assert float(result.stdout) == pytest.approx(calibrated(TRUE_LOGPROB, FALSE_LOGPROB), abs=0.0005)
+    assert len(images(seen[0])) == 10
+
+
+def test_cli_help_needs_no_server():
+    result = subprocess.run([sys.executable, "-m", "robojev", "--help"],
+                            check=True, capture_output=True, text=True)
+    assert "--server" in result.stdout
+
+
 needs_ffmpeg = pytest.mark.skipif(not shutil.which("ffmpeg"), reason="needs ffmpeg")
 
 
@@ -127,4 +147,13 @@ def test_video_frames_cuts_evenly_spaced_frames(attempt):
 def test_done_cuts_a_video_into_the_frames_the_release_reads(server, attempt):
     url, seen = server
     RoboJev(url).done("Put the ring on the peg", attempt)
+    assert len(images(seen[0])) == 10
+
+
+@needs_ffmpeg
+def test_cli_scores_a_video_against_the_selected_server(server, attempt):
+    url, seen = server
+    result = subprocess.run([sys.executable, "-m", "robojev", "Put the ring on the peg", str(attempt),
+                             "--server", url], check=True, capture_output=True, text=True)
+    assert float(result.stdout) == pytest.approx(calibrated(TRUE_LOGPROB, FALSE_LOGPROB), abs=0.0005)
     assert len(images(seen[0])) == 10

@@ -25,5 +25,6 @@ jobs:
         working-directory: /tmp
         run: |
           python -c "import pathlib, robojev; assert (pathlib.Path(robojev.__file__).parent / 'decision.json').is_file()"
+          robojev --help
           robojev-grade --help
           robojev-overlay --help

@@ -1,37 +1,45 @@
 # RoboJev
 
-### Did the robot complete the task? RoboJev-27B looks at the robot trying to complete the task and returns a probability, in roughly a quarter of a second.
+Did the robot complete the task? RoboJev-27B takes a task instruction and ten frames of an attempt and returns P(task completed). Optional final frames from other cameras can provide another view of the outcome.
 
-**[Launch page](https://huggingface.co/spaces/josefchen/RoboJev)** &nbsp;·&nbsp; **[Try your video](https://huggingface.co/spaces/josefchen/RoboJev-demo)** &nbsp;·&nbsp; **[Every result](https://huggingface.co/spaces/josefchen/RoboJev-data)** &nbsp;·&nbsp; **[Evaluation data](https://huggingface.co/datasets/josefchen/RoboJev-evals)** &nbsp;·&nbsp; **[Model card](https://huggingface.co/josefchen/RoboJev-27B)**
+**[Project and paper](https://robo-jev.com)** &nbsp;·&nbsp; **[Try your video — no account needed](https://robo-jev.com/demo)** &nbsp;·&nbsp; **[HF demo](https://huggingface.co/spaces/josefchen/RoboJev-demo)** &nbsp;·&nbsp; **[Every result](https://huggingface.co/spaces/josefchen/RoboJev-data)** &nbsp;·&nbsp; **[Evaluation data](https://huggingface.co/datasets/josefchen/RoboJev-evals)** &nbsp;·&nbsp; **[Model card](https://huggingface.co/josefchen/RoboJev-27B)**
 
 <picture><source media="(max-width: 700px)" srcset="assets/cost-tall.webp"><img src="assets/cost-wide.webp" alt="Accuracy against cost: RoboJev-27B at 95.2% balanced accuracy and $0.192 per 1,000 answers, frontier models at 91.9% to 93.3% and $2.08 to $9.29" width="100%"></picture>
 
-On the 268 held-out SO-101 runs, RoboJev-27B achieves 95.2% balanced accuracy at a cost of $0.19 per 1,000 answers. GPT-6 Astra, GPT-6.1 Sol, Claude Opus 5.5, and Claude Sonnet 5.5 achieve 91.9%-93.3% accuracy at a cost of $2.08-$9.29 per 1,000 answers. The accuracy gap compared to GPT-6 Astra is within noise and its cost is \~48x higher.
+On the 268 held-out SO-101 runs, RoboJev-27B achieves 95.2% balanced accuracy at a cost of $0.19 per 1,000 answers. GPT-6 Astra, GPT-6.1 Sol, Claude Opus 5.5, and Claude Sonnet 5.5 achieve 91.9%-93.3% balanced accuracy at a cost of $2.08-$9.29 per 1,000 answers. The measured balanced-accuracy gap to GPT-6 Astra is 1.91 percentage points, with a paired 95% interval that includes zero. Its measured API cost is about 48 times higher.
 
-The language models all received the same question from four frames of the main camera, while RoboJev-27B read ten frames plus the other cameras. Costs are API list prices from our runs, and one H100 at $2.69 an hour for RoboJev-27B.
+The language models all received the same question from four frames of the main camera, while RoboJev-27B read ten frames plus the other cameras. Costs use API list prices from our runs and one H100 at $2.69 an hour for RoboJev-27B. The 0.26-second median measures serial H100 inference; it excludes media processing and serving overhead. The shared HF demo also has GPU queue and cold-start time.
 
 All model responses are in the [data explorer](https://huggingface.co/spaces/josefchen/RoboJev-data) and the [model card](https://huggingface.co/josefchen/RoboJev-27B) contains the full tables and explains the methodology.
 
 RoboJev-27B: Model card, benchmarks, weights available on Hugging Face. The code for the Python client, dataset grader, video overlay, and LeRobot plugin for RoboJev-27B can be found in this repo.
 
+## Try it first
+
+- **Browser, no local GPU:** [robo-jev.com/demo](https://robo-jev.com/demo) accepts a task and one video without an HF account. The project sponsors this low-demand demo; shared GPU availability and request limits apply.
+- **Recorded examples:** the [HF demo](https://huggingface.co/spaces/josefchen/RoboJev-demo) opens with two real ring attempts and their saved model scores. These examples need no account or GPU. Scoring a new upload directly on HF uses the visitor's HF account and GPU quota.
+- **Python or CLI:** install this client and connect to your own or an explicitly authorised vLLM server below. The client is CPU-only; the model server needs a GPU. The website demo URL is not an OpenAI-compatible vLLM endpoint.
+
 ## Install
 
-To install RoboJev and the RoboJev command-line tools, install the RoboJev client with pip:
+Python 3.10 or newer is required for the small client. Install the current source to get the documented CLI options:
 
 ```bash
-pip install robojev
-pip install pyarrow          # LeRobot v3.0 datasets
-pip install opencv-python    # live camera
+git clone https://github.com/josefchen/robojev.git
+cd robojev
+python -m pip install -e .
 ```
 
-To play with videos you will need to install ffmpeg. To work with LeRobot Datasets v3.0 you will need pyarrow and to use a live camera you will need OpenCV.
+Videos require both `ffmpeg` and `ffprobe` on your PATH (for example, `brew install ffmpeg` on macOS or `sudo apt install ffmpeg` on Debian/Ubuntu). Image-list inputs need neither. Install `python -m pip install ".[v3]"` for LeRobot v3.0 metadata or `python -m pip install ".[camera]"` for a live camera. The published `pip install robojev` package also provides the Python API, but may lag the current source CLI.
 
 ## Use it
 
-Serve the model using vLLM and then call it from the small client in this repo.
+On a GPU host, install [vLLM](https://docs.vllm.ai/en/latest/getting_started/installation/) in its own suitable environment, then serve the model. BF16 weights are about 54.7 GB; the released setup uses one 80 GB GPU, with additional memory needed for serving. This command downloads the weights on first use.
 
 ```bash
-vllm serve josefchen/RoboJev-27B --served-model-name robojev --max-model-len 32768 \
+vllm serve josefchen/RoboJev-27B \
+  --revision e089a9b69a365744b80765057d86583647af95a9 \
+  --served-model-name robojev --max-model-len 32768 \
   --limit-mm-per-prompt '{"image": 16}' --logprobs-mode processed_logprobs --trust-request-chat-template
 ```
 
@@ -45,13 +53,25 @@ judge.done("Put the ring on the peg", "attempt.mp4",
            views={"wrist": "wrist_last.jpg"})                 # with other cameras' last frames
 ```
 
-The `done` method returns P(completed). The model requires 1x 80 GB GPU (bf16).
+The `done` method returns one probability for the whole supplied attempt. Connect to a remote server by passing its base URL to `RoboJev("http://gpu-host:8000")`; use the Python `headers` argument if that server requires authentication. The HTTP client does not load model weights.
 
 Making the same call from a shell works, and displays the probability of having successfully completed the task.
 
 ```bash
-robojev "Put the ring on the peg" attempt.mp4
+robojev "Put the ring on the peg" attempt.mp4 --server http://localhost:8000
+robojev --help
 ```
+
+To use the same released ring example as the demo (ArmnetBench episode 37, Apache-2.0):
+
+```bash
+curl -L --fail -o ring-success.mp4 \
+  https://huggingface.co/spaces/josefchen/RoboJev-demo/resolve/1cf2d202804d50f25af8d7a2da52d4a3c1acf176/examples/ring-success.mp4
+robojev "Insert the colourful ring into the central wooden peg" ring-success.mp4 \
+  --server http://localhost:8000
+```
+
+That command makes a fresh request to your server. It does not replay the HF demo's saved answer, and a different serving setup or adding auxiliary cameras can change the probability.
 
 If you want to draw the probability on a video or live camera input:
 
@@ -74,7 +94,7 @@ It will pick a 3rd person camera and parse ten frames/episode via HTTP byte rang
 
 ## LeRobot
 
-The `lerobot_plugin` directory provides a robojev reward model for LeRobot to use on recorded episodes as well as a reward step for real-robot training that supersedes the per-task reward classifier. See its README for more info.
+The [`lerobot_plugin`](lerobot_plugin/README.md) directory provides a reward-model adapter for scoring recorded episodes and an experimental processor that scores the attempt so far. Both call your vLLM server over HTTP. The processor is not validated as a robot safety or control mechanism; we have not demonstrated improved policy learning. Its threshold can fire before a transient success is undone, so whole-episode evaluation is the supported starting point.
 
 The plugin can also be installed with pip directly from the repository.
 
@@ -95,8 +115,8 @@ The model doesn't actually generate anything. We just stop the prompt at `[decis
 - The weakest performance of RoboJev-27B is in wrist cameras and on long horizon tasks like stirring or folding.
 - RoboJev-27B can only see what you show it. If the video cuts off before the result, its answer is no good.
 - When using just the final frame as input, RoboJev-27B performs worse on new robots, achieving an AUROC of 0.776 on the unseen labs.
-- In robots outside its training set, RoboJev-27B isn't any more accurate than JEV-27B-VL when given the same 10 frames.
-- Community training labels are from 2 models, and have been verified against 200 human labels; some are incorrect.
+- On unseen labs/robots, RoboJev-27B has AUROC 0.890 versus 0.900 for JEV-27B-VL with the same inputs; adaptation has not demonstrated a transfer benefit. Its probabilities are also less well calibrated on unseen domains, so validate any deployment threshold locally.
+- Some community training labels come from two teacher models and may contain errors. Separately, the community evaluation contains 200 manually labelled clips: 135 have a clear binary outcome and contribute to metrics; 65 are ambiguous and are excluded. This evaluation does not establish the accuracy of every training label.
 - RoboJev-27B is not a safety measure.
 
 ## Tests

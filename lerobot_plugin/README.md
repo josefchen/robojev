@@ -1,24 +1,63 @@
 # lerobot-reward-robojev
 
-The package integrates LeRobot with [RoboJev-27B](https://huggingface.co/josefchen/RoboJev-27B), which predicts the likelihood of a robot successfully completing a task from 10 frames of the attempt.
+Score a completed robot episode with [RoboJev-27B](https://huggingface.co/josefchen/RoboJev-27B) through LeRobot's reward-model factory. The adapter sends ten evenly spaced frames and a task sentence to your vLLM server and returns one P(task completed) per episode. It does not load model weights in the LeRobot process.
 
-The package includes the reward model (`type: robojev`), which applies to recorded episodes, and a pipeline step for training on the real robot. Both use a RoboJev server over HTTP, hence no weights are loaded in the LeRobot process.
+## Install and serve
+
+The plugin requires Python 3.12+ and LeRobot 0.6.x (tested with the published 0.6.1 and current main). The standalone `robojev` HTTP client also supports Python 3.10+. From the repository root:
 
 ```bash
-vllm serve josefchen/RoboJev-27B --served-model-name robojev --max-model-len 32768 \
-  --limit-mm-per-prompt '{"image": 16}' --logprobs-mode processed_logprobs --trust-request-chat-template
-hf download josefchen/RoboJev-27B --include "lerobot_plugin/*" --local-dir robojev
-pip install ./robojev/lerobot_plugin
+python -m pip install -e . -e ./lerobot_plugin
 ```
 
-LeRobot will only auto-import plugins that start with some prefixes, and reward models don't have any of those. So you will need to do `import lerobot_reward_robojev` before building either of them.
+On a GPU host with [vLLM installed](https://docs.vllm.ai/en/latest/getting_started/installation/):
 
-## Reward step for real-robot training
+```bash
+vllm serve josefchen/RoboJev-27B \
+  --revision e089a9b69a365744b80765057d86583647af95a9 \
+  --served-model-name robojev --max-model-len 32768 \
+  --limit-mm-per-prompt '{"image": 16}' --logprobs-mode processed_logprobs --trust-request-chat-template
+```
 
-In an environment pipeline, `RewardClassifierProcessorStep` can be replaced by `RoboJevRewardProcessorStep`. The processor will save the frames of the episode of one camera and query RoboJev every `check_every` steps with ten frames evenly distributed across the episode so far, from the first frame to the most recent. Once P(completed) reaches `success_threshold`, the reward is set to `success_reward`, and, if `terminate_on_success` is true, the episode is terminated. The task is presented as a sentence so no classifier needs to be trained per task.
+BF16 weights are about 54.7 GB; the released serving setup uses an 80 GB GPU. The client and plugin can run on a separate CPU machine. `server_url` must be your vLLM base URL, not the browser demo URL. There is an [account-free browser demo](https://robo-jev.com/demo) if you only want to try a clip.
+
+Import `lerobot_reward_robojev` before calling the factory: current released LeRobot does not auto-discover reward-plugin packages. The import registers the config, model and processor locally.
+
+## Score a recorded episode
+
+A runnable example is included at [`examples/score_lerobot_episode.py`](../examples/score_lerobot_episode.py). It decodes a complete video with ffmpeg and calls the current LeRobot API:
+
+```bash
+python examples/score_lerobot_episode.py "Insert the colourful ring into the central wooden peg" \
+  ring-success.mp4 --server http://gpu-host:8000
+```
+
+See the [main README](../README.md#use-it) for a pinned download of that released example clip.
+
+To use frames already in memory:
 
 ```python
-import lerobot_reward_robojev
+import lerobot_reward_robojev  # registers the out-of-tree reward model
+from lerobot.rewards import make_reward_model, make_reward_model_config
+
+config = make_reward_model_config(
+    "robojev", server_url="http://gpu-host:8000", device="cpu",
+    image_key="observation.images.front",
+)
+reward = make_reward_model(config)
+p_done = reward.compute_reward({
+    "observation.images.front": frames,  # torch tensor (batch, time, 3, H, W)
+    "task": tasks,                      # one task sentence per episode
+})
+```
+
+`frames` must contain complete episodes, from start to end. The adapter selects ten evenly spaced frames, including the first and last, from each episode. Images may be uint8 in [0, 255] or floating point in [0, 1]. The result is a CPU float tensor of shape `(batch,)`. Set `success_threshold` to return 1.0 or 0.0 instead of probabilities. Choose a threshold using labelled examples from your own task and camera setup; calibration can change on unseen domains.
+
+## Experimental processor for attempt prefixes
+
+`RoboJevRewardProcessorStep` keeps frames of the current attempt and queries the same server every `check_every` steps after `min_steps`. Call `reset()` at each episode boundary. It adds `robojev_p_done` to the transition's `info` after an answer and records HTTP query time as `robojev_seconds`.
+
+```python
 from lerobot_reward_robojev import RoboJevRewardProcessorStep
 
 step = RoboJevRewardProcessorStep(
@@ -27,26 +66,17 @@ step = RoboJevRewardProcessorStep(
     image_key="observation.images.front",
     check_every=10,
     success_threshold=0.8,
+    terminate_on_success=False,
 )
 ```
 
-The step adds a `robojev_p_done` entry to the `info` of each transition. Each query takes about 0.5 s.
+Queries are synchronous and can block an environment step. The prefix processor has not been validated as a control or safety mechanism, and no policy-learning improvement has been demonstrated. A ring can briefly land and then fall off: crossing a threshold early is not proof of a successful completed episode. The processor's class default is `terminate_on_success=True`; the example disables that behavior. Whole-episode scoring is the supported starting point.
 
-## Reward model for recorded episodes
+## Verification
 
-```python
-import lerobot_reward_robojev
-from lerobot.rewards import make_reward_model, make_reward_model_config
-
-config = make_reward_model_config("robojev", server_url="http://gpu-host:8000",
-                                  image_key="observation.images.front")
-reward = make_reward_model(config)
-p_done = reward.compute_reward({"observation.images.front": frames,   # (batch, time, 3, H, W)
-                                "task": tasks})                         # one sentence per episode
+```bash
+python -m pip install -e '.[test]' -e ./lerobot_plugin
+pytest -q tests/test_lerobot_integration.py
 ```
 
-`compute_reward` will sample 10 frames uniformly from the first frame through the last frame for each episode. It returns one probability per episode or 1.0 or 0.0 if `success_threshold` is specified.
-
-## Tests
-
-We ran it against the released model on two ArmnetBench ring attempts, with frames resized to 426x240. Our reward model returned 0.989 and 0.033, compared to 0.996 and 0.021 in the benchmark. On the successful attempt, our reward model step returned <0.03 until the last frame, after which it outputted 0.989, set the reward, and terminated the episode.
+The integration tests use real LeRobot factories on CPU and mocked server probabilities. They check registration, ten-frame sampling, batch output and thresholding without downloading weights. The HTTP transport and ffmpeg paths are covered by the main client's tests. These checks do not measure the model's accuracy or policy-learning performance.

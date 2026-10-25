@@ -51,7 +51,7 @@ class RoboJevRewardProcessorStep(ProcessorStep):
         served_model: The server's ``--served-model-name``.
         headers: Extra HTTP headers, for example access keys for a hosted endpoint.
         image_key: Observation key of the camera to judge from.
-        check_every: Ask RoboJev every this many steps (each answer takes about half a second).
+        check_every: Ask RoboJev every this many steps; each synchronous HTTP query blocks the step.
         min_steps: Do not ask before the episode has this many steps.
         success_threshold: Probability at which the task counts as done.
         success_reward: Reward given when it does.
